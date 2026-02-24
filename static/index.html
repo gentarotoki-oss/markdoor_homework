@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TODO App</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        h1 { text-align: center; }
+        input, textarea { width: 100%; padding: 8px; margin: 4px 0; box-sizing: border-box; }
+        button { padding: 8px 16px; cursor: pointer; margin: 2px; }
+        .todo-item { border: 1px solid #ddd; padding: 12px; margin: 8px 0; border-radius: 4px; }
+        .completed { text-decoration: line-through; opacity: 0.6; }
+        .filters { text-align: center; margin: 16px 0; }
+        .delete-btn { background: #e74c3c; color: white; border: none; }
+        .toggle-btn { background: #2ecc71; color: white; border: none; }
+        .add-btn { background: #3498db; color: white; border: none; width: 100%; padding: 10px; }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: -300px;
+            padding: 12px 24px;
+            background: #2ecc71;
+            color: white;
+            border-radius: 4px;
+            z-index: 100;
+            transition: right 0.3s ease;
+        }
+        .notification.show {
+            right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="notification" class="notification"></div>
+    <h1>TODO App</h1>
+
+    <input type="text" id="title" placeholder="タスクタイトル">
+    <textarea id="description" placeholder="詳細（任意）" rows="2"></textarea>
+    <button class="add-btn" onclick="addTodo()">タスク追加</button>
+
+    <div class="filters">
+        <button onclick="filterTodos('all')">全て</button>
+        <button onclick="filterTodos('active')">未完了</button>
+        <button onclick="filterTodos('completed')">完了済み</button>
+        |
+        <button onclick="sortTodos('newest')">新しい順</button>
+        <button onclick="sortTodos('oldest')">古い順</button>
+        <button onclick="sortTodos('status')">状態順</button>
+    </div>
+
+    <div id="todoList"></div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+        let currentFilter = "all";
+        let currentSort = "newest";
+
+        async function loadTodos() {
+            const res = await fetch(API + "/todos");
+            const todos = await res.json();
+            const list = document.getElementById("todoList");
+            list.innerHTML = "";
+
+            let filtered = todos.filter(t => {
+                if (currentFilter === "active") return !t.completed;
+                if (currentFilter === "completed") return t.completed;
+                return true;
+            });
+
+                        filtered.sort((a, b) => {
+                if (currentSort === "newest") return new Date(b.created_at) - new Date(a.created_at);
+                if (currentSort === "oldest") return new Date(a.created_at) - new Date(b.created_at);
+                if (currentSort === "status") return a.completed - b.completed;
+                return 0;
+            });
+
+            filtered.forEach(todo => {
+                const div = document.createElement("div");
+                div.className = "todo-item" + (todo.completed ? " completed" : "");
+                div.innerHTML = `
+                    <div id="view-${todo.id}">
+                        <strong>${todo.title}</strong>
+                        <p>${todo.description || ""}</p>
+                        <small>${new Date(todo.created_at).toLocaleString()}</small><br>
+                        <button class="toggle-btn" onclick="toggleTodo(${todo.id}, ${!todo.completed})">
+                        ${todo.completed ? "未完了に戻す" : "完了"}
+                        </button>
+                        <button onclick="showEdit(${todo.id})">編集</button>
+                        <button class="delete-btn" onclick="deleteTodo(${todo.id})">削除</button>
+                    </div>
+                    <div id="edit-${todo.id}" style="display:none;">
+                        <input type="text" id="edit-title-${todo.id}" value="${todo.title}">
+                        <textarea id="edit-desc-${todo.id}" rows="2">${todo.description || ""}</textarea>
+                        <button class="toggle-btn" onclick="saveEdit(${todo.id})">保存</button>
+                        <button onclick="cancelEdit(${todo.id})">キャンセル</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function addTodo() {
+            const title = document.getElementById("title").value;
+            if (!title) { alert("タイトルを入力してください"); return; }
+            await fetch(API + "/todos", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    title: title,
+                    description: document.getElementById("description").value
+                })
+            });
+            document.getElementById("title").value = "";
+            document.getElementById("description").value = "";
+            showNotification("タスクを追加しました");
+            loadTodos();
+        }
+
+        async function toggleTodo(id, completed) {
+            await fetch(API + "/todos/" + id, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({completed: completed})
+            });
+            showNotification("状態を変更しました");
+            loadTodos();
+        }
+
+        async function deleteTodo(id) {
+            if (!confirm("このタスクを削除しますか？")) return;
+            await fetch(API + "/todos/" + id, {method: "DELETE"});
+            showNotification("タスクを削除しました");
+            loadTodos();
+        }
+
+        function filterTodos(filter) {
+            currentFilter = filter;
+            loadTodos();
+        }
+
+        loadTodos();
+
+        function showEdit(id) {
+            document.getElementById("view-" + id).style.display = "none";
+            document.getElementById("edit-" + id).style.display = "block";
+        }
+
+        function cancelEdit(id) {
+            document.getElementById("view-" + id).style.display = "block";
+            document.getElementById("edit-" + id).style.display = "none";
+        }
+
+        async function saveEdit(id) {
+            const title = document.getElementById("edit-title-" + id).value;
+            if (!title) { alert("タイトルを入力してください"); return; }
+            await fetch(API + "/todos/" + id, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    title: title,
+                    description: document.getElementById("edit-desc-" + id).value
+                })
+            });
+            showNotification("タスクを更新しました");
+            loadTodos();
+        }
+        function showNotification(message) {
+            const n = document.getElementById("notification");
+            n.textContent = message;
+            n.classList.add("show");
+            setTimeout(() => { n.classList.remove("show"); }, 2000);
+        }
+        function sortTodos(sort) {
+            currentSort = sort;
+            showNotification("並び替えました");
+            loadTodos();
+        }
+    </script>
+</body>
+</html>
