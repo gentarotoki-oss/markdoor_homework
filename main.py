@@ -23,13 +23,13 @@ DATA_FILE = "todos.json"
 
 class Todo(BaseModel):
     id: int
-    title: str = Field(..., min_length=1)
+    title: str
     description: Optional[str] = None
     completed: bool
     created_at: str
 
 class TodoCreate(BaseModel):
-    title: str
+    title: str= Field(..., min_length=1)
     description: Optional[str] = None
 
 class TodoUpdate(BaseModel):
