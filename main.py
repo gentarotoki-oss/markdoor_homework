@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from datetime import datetime
 from typing import Optional
 from fastapi.responses import RedirectResponse
@@ -23,7 +23,7 @@ DATA_FILE = "todos.json"
 
 class Todo(BaseModel):
     id: int
-    title: str
+    title: str = Field(..., min_length=1)
     description: Optional[str] = None
     completed: bool
     created_at: str
